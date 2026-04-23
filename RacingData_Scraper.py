@@ -1,6 +1,17 @@
 """
-HKJC Race Data Scraper — Traditional Chinese (Parallel)
-Runs 4 browser workers simultaneously, each covering different year ranges.
+HKJC Race Data Scraper — Traditional Chinese.
+
+Two modes:
+  1. Backfill (default): parallel workers across historical year ranges.
+  2. Daily (--daily):    scrape today's race date only, exit 0 fast if no meet.
+                         Designed for GHA cron; honours fixture_guard if present.
+
+CLI flags:
+  --daily                     scrape today's HK date only
+  --date YYYY-MM-DD[,...]     scrape one or more explicit dates (no workers)
+  --backfill                  run the legacy multi-worker historical backfill (default
+                              when no flags given, for backwards compat)
+
 Captures per-race-day, per-race:
   1. Race results + metadata
   2. Dividends
@@ -9,9 +20,10 @@ Captures per-race-day, per-race:
   5. Video replay links
 """
 
+import argparse
 import pandas as pd
 import os, re, time, sys, traceback
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from multiprocessing import Process
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -20,8 +32,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service as ChromeService
 
-CHROMIUM_PATH    = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium"
-CHROMEDRIVER_PATH= "/nix/store/8zj50jw4w0hby47167kqqsaqw4mm5bkd-chromedriver-unwrapped-138.0.7204.100/bin/chromedriver"
+# Honor env overrides; fall back to Replit Nix paths for parity with legacy runs.
+CHROMIUM_PATH = os.environ.get(
+    "CHROMIUM_PATH",
+    "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium",
+)
+CHROMEDRIVER_PATH = os.environ.get(
+    "CHROMEDRIVER_PATH",
+    "/nix/store/8zj50jw4w0hby47167kqqsaqw4mm5bkd-chromedriver-unwrapped-138.0.7204.100/bin/chromedriver",
+)
 
 BASE_URL  = "https://racing.hkjc.com/racing/information/Chinese/Racing/LocalResults.aspx"
 SECT_URL  = "https://racing.hkjc.com/racing/information/Chinese/Racing/DisplaySectionalTime.aspx"
@@ -59,9 +78,13 @@ def make_driver():
     opts.add_argument("--disable-sync")
     opts.add_argument("--disable-translate")
     opts.add_argument("--js-flags=--max-old-space-size=128")
-    opts.binary_location = CHROMIUM_PATH
+    if CHROMIUM_PATH and os.path.exists(CHROMIUM_PATH):
+        opts.binary_location = CHROMIUM_PATH
+    service_kwargs = {}
+    if CHROMEDRIVER_PATH and os.path.exists(CHROMEDRIVER_PATH):
+        service_kwargs["executable_path"] = CHROMEDRIVER_PATH
     return webdriver.Chrome(
-        service=ChromeService(executable_path=CHROMEDRIVER_PATH),
+        service=ChromeService(**service_kwargs),
         options=opts
     )
 
@@ -437,7 +460,68 @@ def worker(worker_id, start_dt, end_dt):
                 pass
 
 
-if __name__ == "__main__":
+def _hk_today() -> date:
+    """Return today's date in HKT (UTC+8)."""
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).date()
+
+
+def run_single_dates(dates: list) -> int:
+    """Scrape explicit list of dates in one driver. Returns count of successful days."""
+    ok = 0
+    driver = None
+    try:
+        driver = make_driver()
+        for d in dates:
+            result = scrape_one_date(driver, d)
+            if result in ("skip", "norace"):
+                print(f"[single] {d} {result}", flush=True)
+            elif result == "fail":
+                print(f"[single] {d} FAIL", flush=True)
+            else:
+                ok += 1
+                print(f"[single] {d} ✓ {result}", flush=True)
+    finally:
+        try:
+            if driver:
+                driver.quit()
+        except Exception:
+            pass
+    return ok
+
+
+def run_daily() -> int:
+    """Scrape today's HK date only. Uses fixture_guard if available for fast-exit.
+
+    Exit codes:
+      0  = success (race day scraped OR fixture guard says no race)
+      10 = no race today per fixture (informational, still exit 0 in caller)
+      20 = scrape attempted but failed
+    """
+    d = _hk_today()
+    print(f"[daily] HK today = {d}", flush=True)
+
+    # Pre-flight via fixture_guard (fail-open on missing cache)
+    try:
+        from fixture_guard import is_race_day, cache_status
+        st = cache_status()
+        print(f"[daily] fixture cache: exists={st['exists']}, rows={st['rows']}, age={st['age_days']}d, stale={st['stale']}", flush=True)
+        if not is_race_day(d):
+            print(f"[daily] fixture_guard says no race on {d} — exiting cleanly", flush=True)
+            return 0
+    except ImportError:
+        print("[daily] fixture_guard not available; proceeding regardless", flush=True)
+
+    ok = run_single_dates([d])
+    if ok == 0:
+        # Either a genuine off-day that passed the guard (cache stale) or a scrape failure.
+        # Either way: we don't want to fail the workflow on a no-race day.
+        print(f"[daily] no data written for {d} (off-day or empty page)", flush=True)
+        return 0
+    return 0
+
+
+def run_backfill():
+    """Legacy multi-worker historical backfill."""
     print(f"啟動 {NUM_WORKERS} 個並行擷取器...", flush=True)
     processes = []
     for i, (s, e) in enumerate(WORKER_RANGES):
@@ -450,3 +534,31 @@ if __name__ == "__main__":
         p.join()
 
     print("\n所有擷取器均已完成！")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="HKJC Race Data Scraper")
+    ap.add_argument("--daily", action="store_true", help="Scrape today's HK date only (GHA daily mode)")
+    ap.add_argument("--date", type=str, help="Comma-separated YYYY-MM-DD dates to scrape")
+    ap.add_argument("--backfill", action="store_true", help="Force legacy multi-worker historical backfill")
+    args = ap.parse_args()
+
+    if args.daily:
+        sys.exit(run_daily())
+    elif args.date:
+        dates = []
+        for s in args.date.split(","):
+            s = s.strip()
+            if not s:
+                continue
+            try:
+                dates.append(datetime.strptime(s, "%Y-%m-%d").date())
+            except ValueError:
+                print(f"[error] invalid date: {s}", flush=True)
+                sys.exit(2)
+        run_single_dates(dates)
+    elif args.backfill:
+        run_backfill()
+    else:
+        # No flags = legacy behavior (backfill) to preserve manual invocation parity
+        run_backfill()

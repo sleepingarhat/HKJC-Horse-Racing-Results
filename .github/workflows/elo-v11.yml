@@ -15,6 +15,9 @@ on:
     # 每天 HKT 04:00 (UTC 20:00 前一日) — scraper 之後
     - cron: '0 20 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   compute:
     runs-on: ubuntu-latest

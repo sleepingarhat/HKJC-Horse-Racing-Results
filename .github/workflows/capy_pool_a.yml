@@ -9,15 +9,21 @@ name: Capy Pool A — Horse Profiles + Trackwork + Injury
 # Until then, run via workflow_dispatch only.
 
 on:
+  # Option A cutover — cron remains disabled until first-pass is complete
+  # (target: 2026-04-27). To enable, uncomment the two `cron` lines below.
+  # The daily cron runs at HK 04:00 (UTC 20:00), ~4 hours after race_daily
+  # completes, so the lifecycle classifier sees fresh last_race_date values.
   # schedule:
-  #   # HK 04:00 Sunday = UTC 20:00 Saturday (enable after first-pass complete)
-  #   - cron: '0 20 * * 6'
+  #   - cron: '0 20 * * *'      # daily HK 04:00
   workflow_dispatch:
     inputs:
       skip_scrapers:
         description: 'Comma-separated scrapers to skip (e.g. HorseTrackwork,HorseInjury)'
         required: false
         default: ''
+
+permissions:
+  contents: write
 
 jobs:
   pool-a:

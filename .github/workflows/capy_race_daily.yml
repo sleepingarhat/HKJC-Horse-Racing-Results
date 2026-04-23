@@ -1,21 +1,33 @@
 name: Capy Race Day — RacingData Results
 
-# Runs RacingData_Scraper.py after each HKJC race meeting to backfill
-# the race-result CSVs under data/<year>/results_*.csv.
+# Runs RacingData_Scraper.py in --daily mode after each HKJC race meeting to
+# backfill the race-result CSVs under data/<year>/results_*.csv.
 #
-# Polls daily at HK 23:30; scraper self-detects whether a meeting ran
-# and exits cleanly when no new data is available.
+# Schedule: HK 23:30 daily (UTC 15:30). Pre-flight fixture_guard check exits
+# cleanly on non-race days to save GHA minutes.
 
 on:
   schedule:
     # HK 23:30 daily = UTC 15:30
     - cron: '30 15 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Optional explicit date YYYY-MM-DD (comma list) to scrape; blank = today'
+        required: false
+        default: ''
+      force:
+        description: 'Bypass fixture_guard (y/n)'
+        required: false
+        default: 'n'
+
+permissions:
+  contents: write
 
 jobs:
   race-day:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,29 +39,62 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Pre-flight — fixture guard
+        id: guard
+        run: |
+          set +e
+          if [ "${{ github.event.inputs.force }}" = "y" ] || [ -n "${{ github.event.inputs.date }}" ]; then
+            echo "skip_check=true — manual override"
+            echo "skip_check=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          python fixture_guard.py check-today
+          rc=$?
+          echo "guard_rc=$rc"
+          if [ $rc -eq 10 ]; then
+            echo "no_race=true" >> $GITHUB_OUTPUT
+          fi
+          exit 0
+
+      - name: Short-circuit — no race today
+        if: steps.guard.outputs.no_race == 'true'
+        run: |
+          echo "::notice::fixture_guard reports no race today, exiting cleanly"
+
       - name: Setup Chrome
         id: chrome
+        if: steps.guard.outputs.no_race != 'true'
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
 
       - name: Setup ChromeDriver
+        if: steps.guard.outputs.no_race != 'true'
         uses: nanasess/setup-chromedriver@v2
 
       - name: Export browser paths
+        if: steps.guard.outputs.no_race != 'true'
         run: |
           echo "CHROMIUM_PATH=${{ steps.chrome.outputs.chrome-path }}" >> $GITHUB_ENV
           echo "CHROMEDRIVER_PATH=$(which chromedriver)" >> $GITHUB_ENV
 
       - name: Install Python deps
+        if: steps.guard.outputs.no_race != 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run race day scraper
-        run: python RacingData_Scraper.py || echo "No meeting / scraper exited non-zero — continuing to push whatever exists"
+        if: steps.guard.outputs.no_race != 'true'
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python RacingData_Scraper.py --date "${{ github.event.inputs.date }}"
+          else
+            python RacingData_Scraper.py --daily
+          fi
 
       - name: Push results to main
+        if: steps.guard.outputs.no_race != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
