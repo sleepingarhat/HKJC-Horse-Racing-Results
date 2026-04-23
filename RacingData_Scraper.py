@@ -71,13 +71,17 @@ def make_driver():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    opts.add_argument("--single-process")
     opts.add_argument("--disable-extensions")
     opts.add_argument("--disable-background-networking")
     opts.add_argument("--disable-default-apps")
     opts.add_argument("--disable-sync")
     opts.add_argument("--disable-translate")
-    opts.add_argument("--js-flags=--max-old-space-size=128")
+    # Replit-specific memory flags (--single-process, --max-old-space-size=128) are only
+    # safe on ~1GB-constrained runners. On GHA (7GB) they cause renderer disconnects.
+    # Opt-in via LOW_MEMORY=1 env for Replit parity.
+    if os.environ.get("LOW_MEMORY") == "1":
+        opts.add_argument("--single-process")
+        opts.add_argument("--js-flags=--max-old-space-size=128")
     if CHROMIUM_PATH and os.path.exists(CHROMIUM_PATH):
         opts.binary_location = CHROMIUM_PATH
     service_kwargs = {}
