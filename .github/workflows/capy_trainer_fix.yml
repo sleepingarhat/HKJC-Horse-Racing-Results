@@ -9,9 +9,7 @@ name: Capy Trainer Scraper (D1 Fix)
 # Runs daily HK 01:00 (after Replit's race-day pipeline on Wed/Sun nights).
 
 on:
-  schedule:
-    # HK 01:00 daily = UTC 17:00 prev day
-    - cron: '0 17 * * *'
+  # SCHEDULE DISABLED — P0 pivot in progress, parsers broken. Re-enable after new P0 workflows land.
   workflow_dispatch:
     inputs:
       ids:

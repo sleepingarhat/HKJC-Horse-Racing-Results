@@ -6,9 +6,7 @@ name: Capy Race Day Scraper
 # fails gracefully (returns exit 2, workflow continues).
 
 on:
-  schedule:
-    # HK 23:30 daily = UTC 15:30
-    - cron: '30 15 * * *'
+  # SCHEDULE DISABLED — P0 pivot in progress, parsers broken. Re-enable after new P0 workflows land.
   workflow_dispatch:
     inputs:
       date:

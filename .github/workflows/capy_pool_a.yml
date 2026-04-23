@@ -6,9 +6,7 @@ name: Capy Pool A — Horse Profiles + Form
 # Runs weekly Sunday HK 04:00 (quiet window, lowest HKJC server load).
 
 on:
-  schedule:
-    # HK 04:00 Sunday = UTC 20:00 Saturday
-    - cron: '0 20 * * 6'
+  # SCHEDULE DISABLED — P0 pivot in progress, parsers broken. Re-enable after new P0 workflows land.
   workflow_dispatch:
     inputs:
       horses:
