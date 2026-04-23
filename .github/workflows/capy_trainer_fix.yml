@@ -34,13 +34,11 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        working-directory: hkjc-data
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r scrapers_v2/requirements.txt
 
       - name: Run trainer scraper
-        working-directory: hkjc-data
         run: |
           if [ -n "${{ github.event.inputs.ids }}" ]; then
             python -m scrapers_v2.orchestrator.daily.scrape_trainers \
@@ -52,7 +50,6 @@ jobs:
           fi
 
       - name: Commit trainer updates
-        working-directory: hkjc-data
         run: |
           git config --global user.name  "Capy Scraper Bot"
           git config --global user.email "capy-bot@noreply.github.com"

@@ -38,14 +38,12 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        working-directory: hkjc-data
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r scrapers_v2/requirements.txt
 
       - name: Resolve target date + venue
         id: target
-        working-directory: hkjc-data
         run: |
           if [ -n "${{ github.event.inputs.date }}" ]; then
             echo "date=${{ github.event.inputs.date }}" >> $GITHUB_OUTPUT
@@ -66,7 +64,6 @@ jobs:
           fi
 
       - name: Run race-day scraper
-        working-directory: hkjc-data
         run: |
           python -m scrapers_v2.orchestrator.daily.scrape_race_day \
             --date ${{ steps.target.outputs.date }} \
@@ -76,7 +73,6 @@ jobs:
             --log-level INFO || echo "No meeting or bad response — skipping commit"
 
       - name: Commit new race-day CSVs
-        working-directory: hkjc-data
         run: |
           git config --global user.name  "Capy Scraper Bot"
           git config --global user.email "capy-bot@noreply.github.com"
