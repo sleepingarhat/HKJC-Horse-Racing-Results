@@ -85,6 +85,7 @@ jobs:
           echo "=== Compute done ==="
 
       - name: Summarize Elo output
+        continue-on-error: true
         working-directory: .elo-pipeline
         run: |
           node -e "
