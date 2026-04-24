@@ -108,6 +108,9 @@ jobs:
             echo "Triggered by run ${{ github.run_id }}"
           } > "$BODY_FILE"
 
+          # ensure label exists (idempotent)
+          gh label create integrity --color 'd73a4a' --description 'Data integrity audit critical gap' 2>/dev/null || true
+
           # close stale integrity issues
           for n in $(gh issue list --label integrity --state open --json number --jq '.[].number'); do
             gh issue close "$n" --comment "Superseded by new audit run."
