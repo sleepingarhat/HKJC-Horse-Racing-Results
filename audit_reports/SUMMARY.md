@@ -1,6 +1,6 @@
 # Data Integrity Audit · 2026-04-24
 
-**Overall:** 🔴 `critical`  ·  critical gaps: **2587**  ·  warn gaps: 73
+**Overall:** 🔴 `critical`  ·  critical gaps: **2547**  ·  warn gaps: 73
 
 **Recommendation:** `replit_fallback_required`
 
@@ -8,8 +8,8 @@
 
 | Category | Severity | Expected | Present | Missing | Stale | Notes |
 |---|---|---|---|---|---|---|
-| race_artefacts | 🔴 critical | 640 | 590 | 50 | 0 | days with any missing artefact: 10 |
-| fixtures_cache | 🟢 ok | 1 | 151 | 0 | 0 | total cached race days: 151 |
+| race_artefacts | 🔴 critical | 600 | 590 | 10 | 0 | days with any missing artefact: 2 |
+| fixtures_cache | 🟢 ok | 1 | 143 | 0 | 0 | total cached race days: 143 |
 | horse_profiles | 🔴 critical | 1272 | 4 | 1268 | 0 | 1268 horses raced in last 180d have NO profile; total profiles in DB: 1886 |
 | horse_form_records | 🔴 critical | 1272 | 4 | 1268 | 0 | 1268 recent-cohort horses have NO form_records file; total form_records files: 1899 |
 | jockey_profiles | 🔴 critical | 44 | 43 | 1 | 0 | 1 jockeys raced recently but NO profile; total jockey profiles: 64 |
@@ -22,26 +22,16 @@
 ### 🔴 race_artefacts — sample missing (first 20)
 
 ```
-results_2025-08-07
-commentary_2025-08-07
-dividends_2025-08-07
-sectional_times_2025-08-07
-video_links_2025-08-07
-results_2025-08-10
-commentary_2025-08-10
-dividends_2025-08-10
-sectional_times_2025-08-10
-video_links_2025-08-10
-results_2025-08-14
-commentary_2025-08-14
-dividends_2025-08-14
-sectional_times_2025-08-14
-video_links_2025-08-14
-results_2025-08-17
-commentary_2025-08-17
-dividends_2025-08-17
-sectional_times_2025-08-17
-video_links_2025-08-17
+results_2026-04-19
+commentary_2026-04-19
+dividends_2026-04-19
+sectional_times_2026-04-19
+video_links_2026-04-19
+results_2026-04-22
+commentary_2026-04-22
+dividends_2026-04-22
+sectional_times_2026-04-22
+video_links_2026-04-22
 ```
 
 ### 🔴 horse_profiles — sample missing (first 20)
