@@ -7,7 +7,16 @@ on:
   schedule:
     # HK 01:00 daily = UTC 17:00 previous day
     - cron: '0 17 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass fixture_guard (run even if no race in past 2 days)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: write
@@ -23,9 +32,15 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pre-flight — fixture guard (race day in past 2 days?)
+      - name: Pre-flight - fixture guard (race day in past 2 days?)
         id: guard
-        run: bash scripts/fixture_guard.sh --window 2 --direction past
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "Force mode: bypassing fixture_guard"
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            bash scripts/fixture_guard.sh --window 2 --direction past
+          fi
 
       - uses: actions/setup-python@v5
         if: steps.guard.outputs.run == 'true'
