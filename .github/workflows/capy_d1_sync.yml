@@ -1,0 +1,165 @@
+name: Capy D1 Sync — push new race day to Cloudflare D1
+
+# After capy_race_daily commits the CSV for a race meeting, this workflow
+# ingests the new CSV into a scratch bulk-local.db and pushes a date-scoped
+# delta to the remote Cloudflare D1 database (tianxi-db).
+#
+# Triggered automatically when capy_race_daily workflow completes successfully.
+# Also supports workflow_dispatch with explicit --date override.
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Race date YYYY-MM-DD (blank = today HK)'
+        required: false
+        default: ''
+      since:
+        description: 'Delta push --since (blank = same as date)'
+        required: false
+        default: ''
+  workflow_run:
+    workflows: ['Capy Race Day — RacingData Results']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # Only run when parent succeeded, or manual dispatch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tianxi-database (CSV source)
+        uses: actions/checkout@v4
+        with:
+          path: tianxi-database
+          fetch-depth: 1
+
+      - name: Checkout tianxi-backend (ingest + push scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: sleepingarhat/tianxi-backend
+          path: tianxi-backend
+          token: ${{ secrets.TIANXI_BACKEND_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve target date
+        id: resolve
+        run: |
+          set -eu
+          D="${{ github.event.inputs.date }}"
+          if [ -z "$D" ]; then
+            D=$(TZ=Asia/Hong_Kong date +%Y-%m-%d)
+          fi
+          SINCE="${{ github.event.inputs.since }}"
+          if [ -z "$SINCE" ]; then
+            SINCE="$D"
+          fi
+          echo "date=$D" >> $GITHUB_OUTPUT
+          echo "since=$SINCE" >> $GITHUB_OUTPUT
+          echo "year=${D%%-*}" >> $GITHUB_OUTPUT
+          echo "Resolved date=$D since=$SINCE"
+
+      - name: Verify CSV exists
+        id: csv
+        run: |
+          set -eu
+          DATE="${{ steps.resolve.outputs.date }}"
+          YEAR="${{ steps.resolve.outputs.year }}"
+          CSV="tianxi-database/data/${YEAR}/results_${DATE}.csv"
+          if [ ! -f "$CSV" ]; then
+            echo "::warning::No results CSV at $CSV — nothing to sync"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            rows=$(wc -l < "$CSV")
+            echo "Found $CSV ($rows lines)"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install tianxi-backend deps
+        if: steps.csv.outputs.skip != 'true'
+        working-directory: tianxi-backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Ingest CSV into scratch bulk-local.db
+        if: steps.csv.outputs.skip != 'true'
+        working-directory: tianxi-backend
+        env:
+          DATE: ${{ steps.resolve.outputs.date }}
+        run: |
+          set -eu
+          # Use an empty scratch DB for this workflow run
+          rm -f bulk-local.db
+          # import-csv supports incremental inserts; schema bootstraps on first use
+          npx tsx scripts/import-csv.ts \
+            --data-dir ../tianxi-database/data \
+            --db bulk-local.db \
+            --date "$DATE"
+
+      - name: Generate delta SQL chunks
+        if: steps.csv.outputs.skip != 'true'
+        working-directory: tianxi-backend
+        env:
+          SINCE: ${{ steps.resolve.outputs.since }}
+        run: |
+          set -eu
+          rm -rf /tmp/d1-delta
+          npx tsx scripts/push-delta.ts \
+            --db=bulk-local.db \
+            --since="$SINCE" \
+            --out=/tmp/d1-delta
+          # D1 rejects BEGIN/COMMIT inline — strip them
+          sed -i '/^BEGIN;$/d; /^COMMIT;$/d' /tmp/d1-delta/*.sql
+          ls -la /tmp/d1-delta/ | head -30
+
+      - name: Install wrangler
+        if: steps.csv.outputs.skip != 'true'
+        run: npm install -g wrangler@4
+
+      - name: Push delta to D1 (FK-parent-first order)
+        if: steps.csv.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        working-directory: tianxi-backend
+        run: |
+          set -eu
+          ORDER=(horses jockeys trainers race_meetings races race_results running_comments dividends horse_elo_snapshots jockey_elo_snapshots trainer_elo_snapshots)
+          FAILED=0
+          for t in "${ORDER[@]}"; do
+            for f in /tmp/d1-delta/${t}-*.sql; do
+              [ -f "$f" ] || continue
+              base=$(basename "$f")
+              if wrangler d1 execute tianxi-db --remote --file="$f" >/tmp/out.log 2>&1; then
+                echo "OK  $base"
+              else
+                echo "FAIL $base"
+                tail -20 /tmp/out.log
+                FAILED=1
+              fi
+            done
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Verify D1 post-push
+        if: steps.csv.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -eu
+          wrangler d1 execute tianxi-db --remote \
+            --command="SELECT COUNT(*) AS meetings, MAX(date) AS latest FROM race_meetings" \
+            --json | tail -40

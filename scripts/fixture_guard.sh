@@ -52,6 +52,7 @@ case "$DIRECTION" in
     done
     ;;
   future)
+    CANDIDATES=" $TODAY"
     for i in $(seq 1 "$WINDOW"); do
       CANDIDATES+=" $(TZ=Asia/Hong_Kong date -d "$TODAY +${i} day" +%Y-%m-%d)"
     done
