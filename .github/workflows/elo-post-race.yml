@@ -1,0 +1,105 @@
+name: ELO Post-Race Auto-Update
+
+# Fires automatically after Capy Race Day successfully commits new results CSVs.
+# Recomputes ELO v12 (time-weighted multi-axis) snapshots through the latest
+# race date and writes reconcile.db snapshots back into the repo.
+#
+# Also supports manual dispatch for backfill scenarios.
+
+on:
+  workflow_run:
+    workflows: ['Capy Race Day — RacingData Results']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Recompute from (YYYY-MM-DD, optional)'
+        required: false
+        type: string
+      force_full_recompute:
+        description: 'Force full recompute from earliest data'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+
+jobs:
+  elo-update:
+    # Only run if the upstream workflow succeeded (avoid running on silent failures).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ELO pipeline deps
+        working-directory: .elo-pipeline
+        run: npm ci --no-audit --no-fund
+
+      - name: Resolve recompute window
+        id: window
+        run: |
+          if [ "${{ inputs.force_full_recompute }}" = "true" ]; then
+            echo "mode=full" >> $GITHUB_OUTPUT
+            echo "since=" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.start_date }}" ]; then
+            echo "mode=since" >> $GITHUB_OUTPUT
+            echo "since=${{ inputs.start_date }}" >> $GITHUB_OUTPUT
+          else
+            # Incremental: last commit that touched reconcile.db
+            LAST=$(git log -1 --format=%cs -- .elo-pipeline/data/reconcile.db 2>/dev/null || echo "")
+            echo "mode=incremental" >> $GITHUB_OUTPUT
+            echo "since=${LAST}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run ELO v12 compute
+        working-directory: .elo-pipeline
+        env:
+          ELO_MODE: ${{ steps.window.outputs.mode }}
+          ELO_SINCE: ${{ steps.window.outputs.since }}
+        run: |
+          if [ "$ELO_MODE" = "full" ]; then
+            npx tsx scripts/elo/compute.ts --engine v12 --full
+          else
+            npx tsx scripts/elo/compute.ts --engine v12 ${ELO_SINCE:+--since "$ELO_SINCE"}
+          fi
+
+      - name: Sanity check reconcile.db
+        run: |
+          if [ ! -s .elo-pipeline/data/reconcile.db ]; then
+            echo "::error::reconcile.db is empty or missing after compute"
+            exit 1
+          fi
+          ls -la .elo-pipeline/data/reconcile.db
+
+      - name: Commit reconcile.db snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "capy-bot"
+          git config user.email "capy-bot@users.noreply.github.com"
+          git add .elo-pipeline/data/reconcile.db
+          if git diff --cached --quiet; then
+            echo "No ELO snapshot change."
+          else
+            git commit -m "[elo][skip ci] v12 recompute $(date -u +%Y-%m-%dT%H:%MZ) (mode=${{ steps.window.outputs.mode }})"
+            git push origin main
+          fi
+
+      - name: Trigger D1 ingest
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run d1-incremental-ingest.yml --ref main || echo "Follow-up ingest dispatch failed (non-fatal)"

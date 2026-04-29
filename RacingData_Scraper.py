@@ -32,14 +32,35 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service as ChromeService
 
-# Honor env overrides; fall back to Replit Nix paths for parity with legacy runs.
-CHROMIUM_PATH = os.environ.get(
+# Honor env overrides; fall back to Replit Nix paths, then common Linux/macOS
+# locations so local contributors do not have to set env vars manually.
+_DEFAULT_CHROMIUM = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium"
+_DEFAULT_CHROMEDRIVER = "/nix/store/8zj50jw4w0hby47167kqqsaqw4mm5bkd-chromedriver-unwrapped-138.0.7204.100/bin/chromedriver"
+
+def _resolve_binary(env_key, default_path, candidates):
+    v = os.environ.get(env_key)
+    if v and os.path.exists(v):
+        return v
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return default_path
+
+CHROMIUM_PATH = _resolve_binary(
     "CHROMIUM_PATH",
-    "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium",
+    _DEFAULT_CHROMIUM,
+    [
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/usr/bin/google-chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ],
 )
-CHROMEDRIVER_PATH = os.environ.get(
+CHROMEDRIVER_PATH = _resolve_binary(
     "CHROMEDRIVER_PATH",
-    "/nix/store/8zj50jw4w0hby47167kqqsaqw4mm5bkd-chromedriver-unwrapped-138.0.7204.100/bin/chromedriver",
+    _DEFAULT_CHROMEDRIVER,
+    ["/usr/bin/chromedriver", "/usr/local/bin/chromedriver"],
 )
 
 BASE_URL  = "https://racing.hkjc.com/racing/information/Chinese/Racing/LocalResults.aspx"
