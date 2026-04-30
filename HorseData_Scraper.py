@@ -215,15 +215,33 @@ for i, (horse_no, decision) in enumerate(todo, 1):
 
     # Staleness check: skip only if the saved CSV already contains a row for
     # the horse's latest known race. Otherwise re-fetch so new races get in.
+    # CSV stores dates as DD/MM/YY or DD/MM/YYYY (HKJC format); last_race_dates
+    # stores them as YYYY-MM-DD. Parse CSV dates to ISO before comparing.
+    def _parse_form_date(s):
+        try:
+            parts = s.strip().split("/")
+            if len(parts) != 3:
+                return ""
+            d, m, y = parts
+            if len(y) == 2:
+                y = "20" + y
+            if len(y) != 4 or not (d.isdigit() and m.isdigit() and y.isdigit()):
+                return ""
+            return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+        except Exception:
+            return ""
+
     if os.path.exists(form_out):
         csv_max_date = ""
         try:
-            with open(form_out, "r", encoding="utf-8") as _fh:
+            with open(form_out, "r", encoding="utf-8-sig") as _fh:
                 for _line in _fh.readlines()[1:]:  # skip header
                     parts = _line.rstrip("\n").split(",")
                     # FORM_COLS index 3 = "date"
-                    if len(parts) >= 4 and parts[3] > csv_max_date:
-                        csv_max_date = parts[3]
+                    if len(parts) >= 4:
+                        iso = _parse_form_date(parts[3])
+                        if iso and iso > csv_max_date:
+                            csv_max_date = iso
         except Exception as _exc:
             print(f"  Warning: could not read {form_out}: {_exc}")
             csv_max_date = ""
