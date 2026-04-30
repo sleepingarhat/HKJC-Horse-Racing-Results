@@ -213,9 +213,25 @@ for i, (horse_no, decision) in enumerate(todo, 1):
 
     # ── Form Records ─────────────────────────────────────────────────────
 
+    # Staleness check: skip only if the saved CSV already contains a row for
+    # the horse's latest known race. Otherwise re-fetch so new races get in.
     if os.path.exists(form_out):
-        print(f"  Form records already saved, skipping")
-        continue
+        csv_max_date = ""
+        try:
+            with open(form_out, "r", encoding="utf-8") as _fh:
+                for _line in _fh.readlines()[1:]:  # skip header
+                    parts = _line.rstrip("\n").split(",")
+                    # FORM_COLS index 3 = "date"
+                    if len(parts) >= 4 and parts[3] > csv_max_date:
+                        csv_max_date = parts[3]
+        except Exception as _exc:
+            print(f"  Warning: could not read {form_out}: {_exc}")
+            csv_max_date = ""
+        latest_race = last_race_dates.get(horse_no, "") or ""
+        if csv_max_date and latest_race and csv_max_date >= latest_race:
+            print(f"  Form records up-to-date (csv_max={csv_max_date}, last_race={latest_race}), skipping")
+            continue
+        print(f"  Form records stale (csv_max={csv_max_date or 'unknown'}, last_race={latest_race or 'unknown'}), re-fetching")
 
     try:
         form_table = None
