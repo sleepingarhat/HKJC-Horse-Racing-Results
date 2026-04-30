@@ -11,6 +11,21 @@
 [![Elo v1.1](https://github.com/sleepingarhat/tianxi-database/actions/workflows/elo-v11.yml/badge.svg)](https://github.com/sleepingarhat/tianxi-database/actions/workflows/elo-v11.yml)
 [![Sanity](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_sanity_daily.yml/badge.svg)](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_sanity_daily.yml)
 [![Integrity](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_integrity_audit.yml/badge.svg)](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_integrity_audit.yml)
+[![D1 Sync](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_d1_sync.yml/badge.svg)](https://github.com/sleepingarhat/tianxi-database/actions/workflows/capy_d1_sync.yml)
+
+---
+
+## 👥 生態系統（3 repos）
+
+| Repo | 角色 | 技術棧 |
+|---|---|---|
+| **tianxi-database** (本 repo · public) | HKJC 爬取 · CSV 數據底 · GHA 調度 · Data audit | Python + GitHub Actions |
+| [**tianxi-backend**](https://github.com/sleepingarhat/tianxi-backend) (private) | D1 + Workers API · ELO 計算 · Composite prediction | Hono + TypeScript + Cloudflare D1 |
+| [**tianxi-site**](https://github.com/sleepingarhat/tianxi-site) (public) | CF Pages 靜態前端 · HKJC 3-level layout | Vanilla HTML/CSS/JS |
+
+Production URLs：
+- Backend API: `https://tianxi-backend.tianxi-entertainment.workers.dev`
+- Frontend: `https://tianxi-site.pages.dev`
 
 ---
 
@@ -249,6 +264,19 @@ Columns: `date, season_year, month, day, weekday, captured_at`
 ### 10. `RunAll_Scrapers.py` — Legacy orchestrator
 
 Backfill / developer tooling，**不參與 daily cron**。跑佢會序貫執行所有 scraper 一次（~6 hour wall-clock），主要用喺 initial bootstrap 同 manual repair。
+
+---
+
+## D1 自動同步 · capy_d1_sync（NEW 2026-04-30）
+
+兩條 workflow 負責將 tianxi-database 嘅 CSV 自動推上 Cloudflare D1（`tianxi-db`）：
+
+| Workflow | Trigger | 處理範圍 |
+|---|---|---|
+| `capy_d1_sync.yml` | 跟 `capy_race_daily` 成功後 auto-trigger | 當日 race_meetings / races / race_results / dividends / running_comments + 相關 FK parent (horses / jockeys / trainers) + 當日 ELO snapshots |
+| `capy_d1_sync_pool_a.yml` | 跟 `capy_pool_a` 成功後 auto-trigger | 30 日內 horse_trackwork / horse_injury / horse_form_records + 相關 horses |
+
+兩條 workflow 都 checkout `tianxi-backend` 嘅 `scripts/import-csv.ts`（CSV → 臨時 bulk-local.db）同 `scripts/push-delta.ts`（date-scoped delta → SQL chunks → `wrangler d1 execute` 按 FK parent-first 順序逐 chunk push）。需要 repo secret `TIANXI_BACKEND_PAT` + `CF_API_TOKEN` + `CF_ACCOUNT_ID`。
 
 ---
 
