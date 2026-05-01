@@ -9,6 +9,10 @@ name: Capy D1 Sync Pool A — trackwork + injury + form
 # workflow_dispatch with an explicit --since window.
 
 on:
+  # Cron fallback — workflow_run chain has silently missed every pool_a run
+  # since 2026-04-30 (total_count=0). Fires ~1h after Pool A's 04:00 HK scrape.
+  schedule:
+    - cron: '17 21 * * *'   # 05:17 HK
   workflow_dispatch:
     inputs:
       since:
