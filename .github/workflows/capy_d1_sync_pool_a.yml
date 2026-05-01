@@ -63,7 +63,7 @@ jobs:
 
       - name: Install tianxi-backend deps
         working-directory: tianxi-backend
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Ingest Pool A sources (profiles + form + trackwork + injury)
         working-directory: tianxi-backend
