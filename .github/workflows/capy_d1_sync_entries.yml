@@ -9,6 +9,10 @@ name: Capy D1 Sync Entries — forward-looking racecards
 # workflow_dispatch with explicit --since window.
 
 on:
+  # Cron fallback — upstream capy_entries cron runs Mon/Tue/Sat 12:00 UTC.
+  # Also run daily to catch midweek/emergency racecards.
+  schedule:
+    - cron: '43 12 * * *'   # 20:43 HK daily
   workflow_dispatch:
     inputs:
       since:
