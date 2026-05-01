@@ -9,6 +9,10 @@ name: ELO Post-Race Auto-Update
 # Also supports manual dispatch for backfill.
 
 on:
+  # Cron fallback — ELO depends on race_daily (15:30 UTC) + d1_sync (16:23 UTC).
+  # Run after d1_sync finishes so ELO sees fresh race results.
+  schedule:
+    - cron: '13 17 * * *'   # 01:13 HK (after d1_sync 00:23 HK)
   workflow_run:
     workflows: ['Capy Race Day — RacingData Results']
     types: [completed]
