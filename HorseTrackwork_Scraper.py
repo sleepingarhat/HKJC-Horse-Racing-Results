@@ -115,7 +115,25 @@ if _ARGS.total_shards > 1:
                  if zlib.crc32(h.encode()) % _ARGS.total_shards == _ARGS.shard}
     print(f"Shard {_ARGS.shard}/{_ARGS.total_shards}: filtered {before} → {len(horse_nos)} horses")
 
-done = {f.replace("trackwork_", "").replace(".csv", "") for f in os.listdir(TRACKWORK_DIR) if f.endswith(".csv")}
+# Empty CSVs (header-only, ~50 bytes) indicate a failed prior scrape.
+# Treating them as "done" caused 1969/1979 horses to never re-scrape.
+# Re-queue them by only marking CSVs with actual data rows as done.
+def _csv_has_data(path):
+    try:
+        with open(path, "r", encoding="utf-8-sig", errors="ignore") as fh:
+            header = fh.readline()
+            first_row = fh.readline().strip()
+            return bool(first_row)
+    except Exception:
+        return False
+
+done = set()
+for f in os.listdir(TRACKWORK_DIR):
+    if not f.endswith(".csv"):
+        continue
+    full = os.path.join(TRACKWORK_DIR, f)
+    if _csv_has_data(full):
+        done.add(f.replace("trackwork_", "").replace(".csv", ""))
 todo_raw = sorted(horse_nos - done)
 print(f"Already done: {len(done)} | Remaining (pre-filter): {len(todo_raw)}")
 
