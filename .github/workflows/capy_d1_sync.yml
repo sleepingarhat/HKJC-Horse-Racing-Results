@@ -8,6 +8,10 @@ name: Capy D1 Sync — push new race day to Cloudflare D1
 # Also supports workflow_dispatch with explicit --date override.
 
 on:
+  # Cron fallback — upstream capy_race_daily cron is 15:30 UTC; give it 45m
+  # to finish scrape + commit before we try to push delta to D1.
+  schedule:
+    - cron: '23 16 * * *'   # 00:23 HK (after race_daily 23:30 HK)
   workflow_dispatch:
     inputs:
       date:
