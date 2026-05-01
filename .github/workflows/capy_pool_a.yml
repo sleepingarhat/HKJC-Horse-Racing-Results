@@ -129,12 +129,12 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download horse-data artefacts (for horse_profiles.csv)
+      - name: Download horse-data artefacts (per-shard subdirs · avoid race)
         uses: actions/download-artifact@v4
         with:
           pattern: pool-a-horsedata-shard-*
-          merge-multiple: true
-          path: .
+          path: /tmp/hd-artifacts
+          # merge-multiple defaults to false — each shard in own subdir, no concurrent-write race
 
       - uses: actions/setup-python@v5
         with:
@@ -156,6 +156,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Merge horse-data artefacts into working tree
+        run: python scripts/merge_pool_a_artifacts.py /tmp/hd-artifacts
 
       - name: Run HorseTrackwork shard ${{ matrix.shard }}
         run: |
@@ -186,12 +189,12 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download horse-data artefacts (for horse_profiles.csv)
+      - name: Download horse-data artefacts (per-shard subdirs · avoid race)
         uses: actions/download-artifact@v4
         with:
           pattern: pool-a-horsedata-shard-*
-          merge-multiple: true
-          path: .
+          path: /tmp/hd-artifacts
+          # merge-multiple defaults to false — each shard in own subdir, no concurrent-write race
 
       - uses: actions/setup-python@v5
         with:
@@ -201,6 +204,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Merge horse-data artefacts into working tree
+        run: python scripts/merge_pool_a_artifacts.py /tmp/hd-artifacts
 
       - name: Run HorseInjury (requests-based, single job)
         run: python HorseInjury_Scraper.py || echo "HorseInjury exited non-zero — uploading partial"
