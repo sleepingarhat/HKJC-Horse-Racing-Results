@@ -101,7 +101,7 @@ jobs:
           set -eu
           FAILED=0
           # race_meetings may also be seeded by entries ingest (non-destructive upsert)
-          for t in race_meetings entries_upcoming; do
+          for t in race_meetings horses entries_upcoming; do
             for f in /tmp/d1-delta/${t}-*.sql; do
               [ -f "$f" ] || continue
               base=$(basename "$f")
