@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-05-03T06:40:27+00:00",
+  "generated_at": "2026-05-04T07:23:59+00:00",
   "generator": "tools/build_manifest.py",
-  "git_head": "78773e0c6a02f9ad0a715de5485843faab795167",
+  "git_head": "8b92b38cc2aaa4aa0149ec9e923936b8a9423e5a",
   "repo": "sleepingarhat/tianxi-database",
   "branch": "main",
   "base_url": {
@@ -175,11 +175,11 @@
   "integrity": {
     "latest_report": "audit_reports/integrity_latest.json",
     "raw_url": "https://raw.githubusercontent.com/sleepingarhat/tianxi-database/main/audit_reports/integrity_latest.json",
-    "scan_date": "2026-05-03",
-    "overall_severity": "critical",
-    "critical_gap_count": 1,
+    "scan_date": "2026-05-04",
+    "overall_severity": "warn",
+    "critical_gap_count": 0,
     "warn_gap_count": 8,
-    "recommendation": "gha_next_delta_will_fix"
+    "recommendation": "monitor_no_block"
   },
   "policy": {
     "odds_weighting": "disabled (beta=0 hardcoded in win-probability model)",
