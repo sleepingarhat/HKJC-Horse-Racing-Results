@@ -48,15 +48,13 @@ jobs:
           ref: main
           fetch-depth: 1
       - id: g
-        name: Fixture gate
+        name: Fixture gate (always-on for trackwork)
         run: |
-          FORCE="${{ github.event.inputs.force }}"
-          if [ "$FORCE" = "true" ]; then
-            echo "force=true — bypassing fixture guard"
-            echo "run=true" >> $GITHUB_OUTPUT
-          else
-            bash scripts/fixture_guard.sh --window 1 --direction past
-          fi
+          # Trackwork happens at training stables daily, regardless of races.
+          # Previous --window 1 --direction past caused 4-day data lag whenever
+          # the past 24h had no race day. Always run.
+          echo "always-on for daily trackwork pipeline"
+          echo "run=true" >> $GITHUB_OUTPUT
 
   horse-data:
     needs: guard
