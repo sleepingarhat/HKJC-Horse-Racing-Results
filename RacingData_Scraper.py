@@ -515,36 +515,38 @@ def run_single_dates(dates: list) -> int:
 
 
 def run_daily() -> int:
-    """Scrape today's HK date only. Uses fixture_guard if available for fast-exit.
+    """Scrape the most recent HK race day on or before today.
 
-    Exit codes:
-      0  = success (race day scraped OR fixture guard says no race)
-      10 = no race today per fixture (informational, still exit 0 in caller)
-      20 = scrape attempted but failed
+    GHA cron fires at UTC 15:30 (= HK 23:30) but with Chrome/dep setup
+    overhead the scraper often starts after HK midnight. Strict "today" HK
+    therefore misses the just-finished race day. We consider both today
+    and yesterday HK and scrape any race-day in that window.
     """
-    d = _hk_today()
-    print(f"[daily] HK today = {d}", flush=True)
+    from datetime import timedelta as _td
+    hk_now = _hk_today()
+    candidates = [hk_now, hk_now - _td(days=1)]
+    print(f"[daily] HK now = {hk_now}; candidates = {[str(c) for c in candidates]}", flush=True)
 
-    # Pre-flight via fixture_guard (fail-open on missing cache)
+    targets = []
     try:
         from fixture_guard import is_race_day, cache_status
         st = cache_status()
         print(f"[daily] fixture cache: exists={st['exists']}, rows={st['rows']}, age={st['age_days']}d, stale={st['stale']}", flush=True)
-        if not is_race_day(d):
-            print(f"[daily] fixture_guard says no race on {d} — exiting cleanly", flush=True)
+        for c in candidates:
+            if is_race_day(c):
+                targets.append(c)
+        if not targets:
+            print(f"[daily] fixture_guard: no race day in window {[str(c) for c in candidates]} — exiting cleanly", flush=True)
             return 0
     except ImportError:
-        print("[daily] fixture_guard not available; proceeding regardless", flush=True)
+        print("[daily] fixture_guard not available; scraping today only", flush=True)
+        targets = [hk_now]
 
-    ok = run_single_dates([d])
+    print(f"[daily] scraping race day(s): {[str(t) for t in targets]}", flush=True)
+    ok = run_single_dates(targets)
     if ok == 0:
-        # Either a genuine off-day that passed the guard (cache stale) or a scrape failure.
-        # Either way: we don't want to fail the workflow on a no-race day.
-        print(f"[daily] no data written for {d} (off-day or empty page)", flush=True)
-        return 0
+        print(f"[daily] no data written for {targets} (empty pages?)", flush=True)
     return 0
-
-
 def run_backfill():
     """Legacy multi-worker historical backfill."""
     print(f"啟動 {NUM_WORKERS} 個並行擷取器...", flush=True)
