@@ -138,7 +138,18 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "check-today":
-        sys.exit(_cli_check(date.today()))
+        # Use HK time (UTC+8) and accept today∨yesterday as race-day.
+        # Cron runs HK 23:30; with setup overhead the scraper often starts
+        # past HK midnight. Strict "today" mis-classifies the just-finished
+        # race day as no-race.
+        from datetime import timedelta as _td
+        hk_now = (datetime.now(timezone.utc) + _td(hours=8)).date()
+        for cand in (hk_now, hk_now - _td(days=1)):
+            if is_race_day(cand):
+                print(f"RACE_DAY {cand} (window today∨yesterday HK)")
+                sys.exit(0)
+        print(f"NO_RACE in window {hk_now - _td(days=1)} or {hk_now}")
+        sys.exit(10)
     if args.cmd == "check-date":
         d = _parse_date(args.date)
         if not d:
