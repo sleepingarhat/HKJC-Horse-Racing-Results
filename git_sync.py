@@ -281,6 +281,19 @@ def push_data_safely(stats: dict | None = None,
         if delay:
             _log(f"Retrying push in {delay}s (attempt {attempt + 1})...")
             time.sleep(delay)
+            # Concurrent pushes (parallel GHA workflows) can win the race and
+            # reject ours with non-fast-forward. Rebase our local commit onto
+            # the latest remote main before each retry so a one-shot job does
+            # not lose data.
+            try:
+                subprocess.run(["git", "fetch", "origin", "main"],
+                               check=True, capture_output=True, text=True, timeout=120)
+                subprocess.run(["git", "rebase", "origin/main"],
+                               check=True, capture_output=True, text=True, timeout=120)
+                _log("Rebased onto latest origin/main.")
+            except subprocess.CalledProcessError as re:
+                _log(f"Rebase failed (attempt {attempt + 1}): {(re.stderr or str(re))[:300]}")
+                subprocess.run(["git", "rebase", "--abort"], capture_output=True)
         try:
             subprocess.run(
                 ["git", "push", "origin", "HEAD:main"],
