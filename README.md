@@ -455,3 +455,25 @@ HKJC 原始賽果為公開資訊，本 repo 只做 **結構化重組** 同 **sch
 - Data schema 詳情：[DATA_NOTES.md](./DATA_NOTES.md)
 
 *Maintained by Capy / GitHub Actions · 9 個 workflow 24/7 自主運行 · 每日自動數據完整性審計。*
+
+
+  ## 已知問題修復記錄
+
+  ### 2026-05-10 · Scraper R1 重複 bug（5/9 賽果 backfill）
+
+  **症狀**：5/9 沙田 11 場賽果 `results_2026-05-09.csv` 寫入 126 行，但全部 race_no=1（即 R1 重複 9 次），R2–R11 完全缺失。`commentary_2026-05-09.csv` / `dividends_2026-05-09.csv` 同樣中招。
+
+  **Root cause**（兩層）：
+  1. `get_race_urls(driver, formatted_date, venue)` 由 racecard 主頁攞 `<a href>`，但同一場馬會出現多次連結（meeting nav + body + footer），無 dedupe。當 collapse 到 set 後可能淨返 1 條。
+  2. HKJC 對 non-existent race_no 唔會 404，會默默 fallback 渲染 R1。原 main loop 無 `seen_race_nos` guard，每次 iter 都重新解 R1 同一場。
+
+  **Fix（3 個 commit, on `main`）**：
+  - `e1b96572` — `get_race_urls`: URL set 去重；若 distinct < 2，主動 probe RaceNo=2..14 補回連結
+  - `99e15503` — 修復 dedupe loop 嘅 indentation（4/8 vs 6/10 space 混用導致 SyntaxError）
+  - `caa0bc06` — 還原 `divs = parse_dividends(driver)` 行（前序 patch 不慎 drop 咗）
+  - main loop 加 `seen_race_nos = set()`，遇到重複 race_no 即 `continue`
+
+  **Verification**：手動 dispatch `capy_race_daily` workflow_dispatch（`date=2026-05-09, force=y`）GHA #43 ✅ success，5/9 CSV 重生為 143 rows × 11 races，每場 winner 唔同（R1 鵲橋飛昇 → R11 錶之星河）。
+
+  **防再犯**：未來若 `get_race_urls` 返 1 條 URL 應視為 anomaly；建議下游 ingest pipeline 加 race_no diversity sanity check（每個賽馬日 distinct race_no ≥ 8）。
+  
