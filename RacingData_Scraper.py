@@ -385,24 +385,24 @@ def scrape_one_date(driver, single_date):
     all_results, all_dividends, all_sectional, all_commentary, all_videos = [], [], [], [], []
 
     seen_race_nos = set()
-      for race_url in race_urls:
-          if not load_page(driver, race_url):
-              continue
-          tabs = driver.find_elements(By.CLASS_NAME, "race_tab")
-          if not tabs:
-              continue
-          header  = parse_race_header(tabs[0])
-          race_no = header["race_no"]
-          # Fix (2026-05-10): even after URL dedupe, HKJC may silently render R1's
-          # data when probed for a non-existent race. Trust parse_race_header's
-          # race_no over the URL and skip duplicates.
-          if not race_no or race_no in seen_race_nos:
-              continue
-          seen_race_nos.add(race_no)
+    for race_url in race_urls:
+        if not load_page(driver, race_url):
+            continue
+        tabs = driver.find_elements(By.CLASS_NAME, "race_tab")
+        if not tabs:
+            continue
+        header  = parse_race_header(tabs[0])
+        race_no = header["race_no"]
+        # Fix (2026-05-10): even after URL dedupe, HKJC may silently render R1's
+        # data when probed for a non-existent race. Trust parse_race_header's
+        # race_no over the URL and skip duplicates.
+        if not race_no or race_no in seen_race_nos:
+            continue
+        seen_race_nos.add(race_no)
 
-          results = parse_results_table(driver)
-          if not results:
-              continue
+        results = parse_results_table(driver)
+        if not results:
+            continue
         video_rec = extract_video_links(driver)
         video_rec.update({"date": formatted_date, "venue": venue, "race_no": race_no})
         all_videos.append(video_rec)
