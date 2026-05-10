@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-05-10T06:44:30+00:00",
+  "generated_at": "2026-05-10T16:31:58+00:00",
   "generator": "tools/build_manifest.py",
-  "git_head": "6279ddcb8599367292a1f45693d99c19b630d2c6",
+  "git_head": "269abbc0fee86b60461a364f96599c6827c31d47",
   "repo": "sleepingarhat/tianxi-database",
   "branch": "main",
   "base_url": {
@@ -16,7 +16,7 @@
   },
   "summary": {
     "race_days": 907,
-    "race_artefact_files": 4529,
+    "race_artefact_files": 4528,
     "fixtures_rows": 143,
     "horse_form_files": 5952,
     "horse_profile_rows": 5954,
@@ -51,7 +51,7 @@
       "count_by_kind": {
         "results": 901,
         "commentary": 907,
-        "dividends": 907,
+        "dividends": 906,
         "sectional": 907,
         "video": 907
       },
