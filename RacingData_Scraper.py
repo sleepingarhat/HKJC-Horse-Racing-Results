@@ -403,6 +403,7 @@ def scrape_one_date(driver, single_date):
         results = parse_results_table(driver)
         if not results:
             continue
+        divs    = parse_dividends(driver)
         video_rec = extract_video_links(driver)
         video_rec.update({"date": formatted_date, "venue": venue, "race_no": race_no})
         all_videos.append(video_rec)
