@@ -320,19 +320,30 @@ def parse_commentary(driver, date_compact, race_no):
 
 
 def get_race_urls(driver, meet_date):
-    urls = [f"{BASE_URL}?RaceDate={meet_date}&RaceNo=1"]
-    try:
-        anchors = driver.find_elements(By.XPATH, "//table[contains(@class,'js_racecard')]//a[@href]")
-        for a in anchors:
-            href = a.get_attribute("href") or ""
-            if "resultsall" in href:
-                continue
-            m = re.search(r"RaceNo=(\d+)", href, re.IGNORECASE)
-            if m:
-                urls.append(f"{BASE_URL}?RaceDate={meet_date}&RaceNo={m.group(1)}")
-    except Exception:
-        pass
-    return urls
+      # Fix (2026-05-10): HKJC racecard widget sometimes returns 9 anchors all
+      # pointing to RaceNo=1, causing the loop to scrape R1 nine times and write
+      # 126 rows all labeled race_no=1. Dedupe by race number, then probe 2..14
+      # sequentially if dedupe collapsed to a single URL.
+      seen = {1}
+      urls = [f"{BASE_URL}?RaceDate={meet_date}&RaceNo=1"]
+      try:
+          anchors = driver.find_elements(By.XPATH, "//table[contains(@class,'js_racecard')]//a[@href]")
+          for a in anchors:
+              href = a.get_attribute("href") or ""
+              if "resultsall" in href:
+                  continue
+              m = re.search(r"RaceNo=(\d+)", href, re.IGNORECASE)
+              if m:
+                  rn = int(m.group(1))
+                  if rn not in seen:
+                      seen.add(rn)
+                      urls.append(f"{BASE_URL}?RaceDate={meet_date}&RaceNo={rn}")
+      except Exception:
+          pass
+      if len(urls) == 1:
+          for rn in range(2, 15):
+              urls.append(f"{BASE_URL}?RaceDate={meet_date}&RaceNo={rn}")
+      return urls
 
 
 def extract_venue(driver):
@@ -373,17 +384,25 @@ def scrape_one_date(driver, single_date):
 
     all_results, all_dividends, all_sectional, all_commentary, all_videos = [], [], [], [], []
 
-    for race_url in race_urls:
-        if not load_page(driver, race_url):
-            continue
-        tabs = driver.find_elements(By.CLASS_NAME, "race_tab")
-        if not tabs:
-            continue
-        header  = parse_race_header(tabs[0])
-        race_no = header["race_no"]
+    seen_race_nos = set()
+      for race_url in race_urls:
+          if not load_page(driver, race_url):
+              continue
+          tabs = driver.find_elements(By.CLASS_NAME, "race_tab")
+          if not tabs:
+              continue
+          header  = parse_race_header(tabs[0])
+          race_no = header["race_no"]
+          # Fix (2026-05-10): even after URL dedupe, HKJC may silently render R1's
+          # data when probed for a non-existent race. Trust parse_race_header's
+          # race_no over the URL and skip duplicates.
+          if not race_no or race_no in seen_race_nos:
+              continue
+          seen_race_nos.add(race_no)
 
-        results = parse_results_table(driver)
-        divs    = parse_dividends(driver)
+          results = parse_results_table(driver)
+          if not results:
+              continue
         video_rec = extract_video_links(driver)
         video_rec.update({"date": formatted_date, "venue": venue, "race_no": race_no})
         all_videos.append(video_rec)
