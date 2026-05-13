@@ -64,6 +64,19 @@ jobs:
           D="${{ github.event.inputs.date }}"
           if [ -z "$D" ]; then
             D=$(TZ=Asia/Hong_Kong date +%Y-%m-%d)
+          # Cron fires at 00:23 HK -> "today HK" already rolled over before
+          # capy_race_daily (15:30 UTC = 23:30 HK) finishes scraping the just-
+          # ended race day. If today's CSV doesn't exist yet but yesterday's
+          # does, sync yesterday instead. Manual --date input bypasses this.
+          YEAR_TODAY="${D%%-*}"
+          if [ ! -f "tianxi-database/data/${YEAR_TODAY}/results_${D}.csv" ]; then
+            D_YDAY=$(TZ=Asia/Hong_Kong date -d "yesterday" +%Y-%m-%d)
+            YEAR_YDAY="${D_YDAY%%-*}"
+            if [ -f "tianxi-database/data/${YEAR_YDAY}/results_${D_YDAY}.csv" ]; then
+              echo "[date-fallback] today HK ($D) has no CSV; using yesterday HK ($D_YDAY)"
+              D="$D_YDAY"
+            fi
+          fi
           fi
           SINCE="${{ github.event.inputs.since }}"
           if [ -z "$SINCE" ]; then
