@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-05-13T16:16:23+00:00",
+  "generated_at": "2026-05-13T17:25:21+00:00",
   "generator": "tools/build_manifest.py",
-  "git_head": "4ec373e1aba2ce4107df0eb1207b7de1f9f99ffe",
+  "git_head": "a78290e5125cce458ed13be017aef956a9974a55",
   "repo": "sleepingarhat/tianxi-database",
   "branch": "main",
   "base_url": {
@@ -49,10 +49,10 @@
       "path_template": "data/{year}/{kind}_{date}.csv",
       "raw_url_template": "https://raw.githubusercontent.com/sleepingarhat/tianxi-database/main/data/{year}/{kind}_{date}.csv",
       "count_by_kind": {
-        "results": 902,
+        "results": 901,
         "commentary": 908,
         "dividends": 908,
-        "sectional": 907,
+        "sectional": 908,
         "video": 908
       },
       "distinct_race_days": 908,
