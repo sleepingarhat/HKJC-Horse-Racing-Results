@@ -102,7 +102,17 @@ jobs:
         run: |
           set -eu
           S="${{ github.event.inputs.since }}"
-          if [ -z "$S" ]; then S=$(TZ=Asia/Hong_Kong date +%Y-%m-%d); fi
+          if [ -z "$S" ]; then
+            # Default: today HK. Cron fires every 10 min including post-midnight HK
+            # (e.g. 16:08 UTC = 00:08 HKT next day) when bulk-local.db only has
+            # data for "yesterday HK". Always include yesterday HK as well so
+            # post-midnight runs still push the just-finished race day's odds.
+            T=$(TZ=Asia/Hong_Kong date +%Y-%m-%d)
+            Y=$(TZ=Asia/Hong_Kong date -d "yesterday" +%Y-%m-%d)
+            # Use yesterday as SINCE — captures both yesterday + today, slightly
+            # wider window is harmless (push-delta filters by snapshot timestamp).
+            S="$Y"
+          fi
           echo "since=$S" >> $GITHUB_OUTPUT
 
       - name: Generate odds delta chunks
