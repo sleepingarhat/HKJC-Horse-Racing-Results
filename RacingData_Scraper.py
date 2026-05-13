@@ -320,30 +320,15 @@ def parse_commentary(driver, date_compact, race_no):
 
 
 def get_race_urls(driver, meet_date):
-      # Fix (2026-05-10): HKJC racecard widget sometimes returns 9 anchors all
-      # pointing to RaceNo=1, causing the loop to scrape R1 nine times and write
-      # 126 rows all labeled race_no=1. Dedupe by race number, then probe 2..14
-      # sequentially if dedupe collapsed to a single URL.
-      seen = {1}
-      urls = [f"{BASE_URL}?RaceDate={meet_date}&RaceNo=1"]
-      try:
-          anchors = driver.find_elements(By.XPATH, "//table[contains(@class,'js_racecard')]//a[@href]")
-          for a in anchors:
-              href = a.get_attribute("href") or ""
-              if "resultsall" in href:
-                  continue
-              m = re.search(r"RaceNo=(\d+)", href, re.IGNORECASE)
-              if m:
-                  rn = int(m.group(1))
-                  if rn not in seen:
-                      seen.add(rn)
-                      urls.append(f"{BASE_URL}?RaceDate={meet_date}&RaceNo={rn}")
-      except Exception:
-          pass
-      if len(urls) == 1:
-          for rn in range(2, 15):
-              urls.append(f"{BASE_URL}?RaceDate={meet_date}&RaceNo={rn}")
-      return urls
+        # Fix (2026-05-13 v2): always probe R1..R14 unconditionally. Earlier
+        # heuristics that read RaceNo anchors from the js_racecard widget were
+        # unreliable: HKJC sometimes returns N anchors all pointing to RaceNo=1
+        # (handled in v1 by dedupe + fallback probe), but other times returns
+        # only R1..R8 anchors when R9 actually exists, causing R9 to be missed
+        # silently. Per-race dedupe in scrape_one_date by parsed race_no
+        # already drops bogus pages, so blanket probing is safe.
+        _ = driver  # parameter kept for signature compatibility
+        return [f"{BASE_URL}?RaceDate={meet_date}&RaceNo={rn}" for rn in range(1, 15)]
 
 
 def extract_venue(driver):
@@ -392,8 +377,11 @@ def scrape_one_date(driver, single_date):
     if not driver.find_elements(By.CLASS_NAME, "race_tab"):
         return "norace"
 
-    venue     = extract_venue(driver)
-    race_urls = get_race_urls(driver, meet_date)
+    # Fix (2026-05-13 v2): venue is read per race below (the index page's
+      # js_racecard widget can show the wrong venue when multiple meetings are
+      # listed). Initialize as empty here.
+      venue     = ""
+      race_urls = get_race_urls(driver, meet_date)
 
     all_results, all_dividends, all_sectional, all_commentary, all_videos = [], [], [], [], []
 
@@ -405,7 +393,12 @@ def scrape_one_date(driver, single_date):
         if not tabs:
             continue
         header  = parse_race_header(tabs[0])
-        race_no = header["race_no"]
+          race_no = header["race_no"]
+          # Re-extract venue from the actual race page; the index page's widget
+          # may misreport venue when HKJC lists upcoming meetings on the strip.
+          race_venue = extract_venue(driver)
+          if race_venue:
+              venue = race_venue
         # Fix (2026-05-10): even after URL dedupe, HKJC may silently render R1's
         # data when probed for a non-existent race. Trust parse_race_header's
         # race_no over the URL and skip duplicates.
