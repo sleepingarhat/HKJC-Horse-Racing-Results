@@ -368,8 +368,21 @@ def scrape_one_date(driver, single_date):
     commentary_file = os.path.join(year_folder, f"commentary_{formatted_date}.csv")
     video_file      = os.path.join(year_folder, f"video_links_{formatted_date}.csv")
 
+    def _csv_row_count(path):
+        try:
+            with open(path, "r", encoding="utf-8-sig") as fh:
+                return sum(1 for _ in fh)
+        except Exception:
+            return 0
+
+    # Fix (2026-05-13): partial scrapes (e.g. R1 only when R2-R9 not yet posted)
+    # left tiny CSVs that caused all subsequent runs to skip the date forever.
+    # HKJC meetings always have 8-11 races x 10-14 horses = 80-150 rows + header,
+    # so a results file with <30 rows is a partial scrape that must be retried.
     if all(os.path.exists(f) for f in [results_file, dividends_file, sectional_file, commentary_file, video_file]):
-        return "skip"
+        if _csv_row_count(results_file) >= 30:
+            return "skip"
+        print(f"[skip-check] {formatted_date} CSVs exist but results has <30 rows -> re-scraping", flush=True)
 
     main_url = f"{BASE_URL}?RaceDate={meet_date}"
     if not load_page(driver, main_url):
